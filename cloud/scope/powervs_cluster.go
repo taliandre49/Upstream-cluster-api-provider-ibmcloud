@@ -174,7 +174,9 @@ func NewPowerVSClusterScope(params PowerVSClusterScopeParams) (*PowerVSClusterSc
 	// if Spec.ServiceInstanceID is set fetch zone associated with it or else use Spec.Zone.
 	if params.IBMPowerVSCluster.Spec.ServiceInstanceID != "" {
 		// Create Resource Controller client.
-		var serviceOption resourcecontroller.ServiceOptions
+		serviceOption := resourcecontroller.ServiceOptions{
+			ResourceControllerV2Options: &resourcecontrollerv2.ResourceControllerV2Options{},
+		}
 		// Fetch the resource controller endpoint.
 		rcEndpoint := endpoints.FetchEndpoints(string(endpoints.RC), params.ServiceEndpoint)
 		if rcEndpoint != "" {

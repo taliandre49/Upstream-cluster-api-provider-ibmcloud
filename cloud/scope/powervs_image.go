@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	"sigs.k8s.io/cluster-api-provider-ibmcloud/pkg/cloud/services/authenticator"
 	"sigs.k8s.io/cluster-api-provider-ibmcloud/pkg/cloud/services/powervs"
 	"sigs.k8s.io/cluster-api-provider-ibmcloud/pkg/cloud/services/resourcecontroller"
 	"sigs.k8s.io/cluster-api-provider-ibmcloud/pkg/endpoints"
@@ -78,7 +79,9 @@ func NewPowerVSImageScope(ctx context.Context, params PowerVSImageScopeParams) (
 	scope.IBMPowerVSImage = params.IBMPowerVSImage
 
 	// Create Resource Controller client.
-	var serviceOption resourcecontroller.ServiceOptions
+	serviceOption := resourcecontroller.ServiceOptions{
+		ResourceControllerV2Options: &resourcecontrollerv2.ResourceControllerV2Options{},
+	}
 	// Fetch the resource controller endpoint.
 	rcEndpoint := endpoints.FetchEndpoints(string(endpoints.RC), params.ServiceEndpoint)
 	if rcEndpoint != "" {
@@ -133,10 +136,25 @@ func NewPowerVSImageScope(ctx context.Context, params PowerVSImageScopeParams) (
 	}
 
 	// Fetch the service endpoint.
-	if svcEndpoint := endpoints.FetchPVSEndpoint(endpoints.ConstructRegionFromZone(*res.RegionID), params.ServiceEndpoint); svcEndpoint != "" {
+	// Use FetchEndpoints (matches on ID only) rather than the deprecated FetchPVSEndpoint
+	// (which also requires a region match). The cluster scope's getPowerVSClient uses the
+	// same ID-only lookup; using the region-aware variant here caused the URL override to be
+	// silently skipped when res.RegionID did not round-trip through ConstructRegionFromZone
+	// to the same region string that was stored in the ServiceEndpoint list, leaving the
+	// session URL as the production default and producing a "bluemix" CRN instead of
+	// "staging", which then caused the PowerVS API to validate the bearer token against
+	// iam.cloud.ibm.com/identity/keys instead of iam.test.cloud.ibm.com/identity/keys.
+	if svcEndpoint := endpoints.FetchEndpoints(string(endpoints.PowerVS), params.ServiceEndpoint); svcEndpoint != "" {
 		options.IBMPIOptions.URL = svcEndpoint
 		log.V(3).Info("Overriding the default PowerVS service endpoint", "serviceEndpoint", svcEndpoint)
 	}
+
+	// Get the authenticator to ensure IAM endpoint overrides are respected.
+	auth, err := authenticator.GetIAMAuthenticator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authenticator: %w", err)
+	}
+	options.Authenticator = auth
 
 	c, err := powervs.NewService(options)
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"golang.org/x/net/http/httpproxy"
+	"sigs.k8s.io/cluster-api-provider-ibmcloud/pkg/cloud/services/authenticator"
 
 	"github.com/IBM/ibm-cos-sdk-go/aws"
 	"github.com/IBM/ibm-cos-sdk-go/aws/credentials/ibmiam"
@@ -33,8 +34,8 @@ import (
 
 // iamEndpoint represent the IAM authorisation URL.
 const (
-	iamEndpoint  = "https://iam.cloud.ibm.com/identity/token"
-	cosURLDomain = "cloud-object-storage.appdomain.cloud"
+	iamEndpointDefault = "https://iam.cloud.ibm.com/identity/token"
+	cosURLDomain       = "cloud-object-storage.appdomain.cloud"
 )
 
 // Service holds the IBM Cloud Resource Controller Service specific information.
@@ -120,6 +121,13 @@ func NewService(options ServiceOptions, apikey, serviceInstance string) (Cos, er
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 		},
+	}
+	// Get IAM endpoint from authenticator properties, fallback to default.
+	iamEndpoint := iamEndpointDefault
+	if props, err := authenticator.GetProperties(); err == nil {
+		if authURL := props["AUTH_URL"]; authURL != "" {
+			iamEndpoint = authURL + "/identity/token"
+		}
 	}
 	options.Config.Credentials = ibmiam.NewStaticCredentials(aws.NewConfig(), iamEndpoint, apikey, serviceInstance)
 
