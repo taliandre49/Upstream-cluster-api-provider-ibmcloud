@@ -2187,7 +2187,9 @@ func (s *PowerVSClusterScope) createLoadBalancer(ctx context.Context, lb infrav1
 	options.SetResourceGroup(&vpcv1.ResourceGroupIdentity{
 		ID: &resourceGroupID,
 	})
-
+	options.SetProfile(&vpcv1.LoadBalancerProfileIdentityByName{
+		Name: ptr.To(string(*lb.Profile)),
+	})
 	subnetIDs := s.GetVPCSubnetIDs()
 	if subnetIDs == nil {
 		return nil, fmt.Errorf("no subnets are present for load balancer creation")
